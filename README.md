@@ -195,44 +195,111 @@ Reading it from left to right tells the whole story. Nothing happens in `T0` and
 The module uses the classic **three-block FSM coding style**, which keeps sequential and combinational logic cleanly separated and maps predictably onto hardware: a state register, a next-state block, and an output block. The next-state block is where the rotating priority lives, and it reads almost exactly like the transition table above.
 
 ```verilog
-// 1) State register: asynchronous active-low reset
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) state <= IDLE;
-    else        state <= next_state;
+module rr_arbiter_fsm(gnt,req,clk,rst); 
+output reg [2:0]gnt;
+input wire [2:0] req;
+input clk,rst;
+
+localparam IDLE=2'b00,
+g1=2'b01,
+g2=2'b10,
+g3=2'b11;
+
+reg [2:0]ns,s;
+reg [1:0]turn,next_turn;
+
+always @(posedge clk or posedge rst)
+begin 
+if(rst)
+    begin
+    s<=IDLE;
+    turn <= 1'b0;
+    end
+else
+    begin
+    s<=ns;
+    turn <= next_turn;
+    end 
 end
 
-// 2) Next-state logic: priority order depends on who owns the grant now
-always @(*) begin
-    next_state = IDLE;
-    case (state)
-        IDLE, GNT_M2: begin                       // order: M0 -> M1 -> M2
-            if      (req[0]) next_state = GNT_M0;
-            else if (req[1]) next_state = GNT_M1;
-            else if (req[2]) next_state = GNT_M2;
-        end
-        GNT_M0: begin                             // order: M1 -> M2 -> M0
-            if      (req[1]) next_state = GNT_M1;
-            else if (req[2]) next_state = GNT_M2;
-            else if (req[0]) next_state = GNT_M0;
-        end
-        GNT_M1: begin                             // order: M2 -> M0 -> M1
-            if      (req[2]) next_state = GNT_M2;
-            else if (req[0]) next_state = GNT_M0;
-            else if (req[1]) next_state = GNT_M1;
-        end
-        default: next_state = IDLE;
-    endcase
+always @ (*)
+begin
+ns=s;
+next_turn=turn;
+gnt=1'b0;
+
+case(s)
+IDLE: begin
+    if (turn == 2'b00) begin
+        if (req[0])      
+            ns = g1;
+        else if (req[1]) 
+            ns = g2;
+        else if (req[2]) 
+            ns = g3;
+    end
+    else if (turn == 2'b01) begin
+         if (req[1])      
+            ns = g2;
+         else if (req[2]) 
+            ns = g3;
+         else if (req[0]) 
+            ns = g1;
+    end
+    else if (turn == 2'b10) begin
+         if (req[2])      
+            ns = g3;
+         else if (req[0]) 
+            ns = g1;
+         else if (req[1]) 
+            ns = g2;
+    end
+end 
+g1: begin
+     gnt[0]=1;                 
+     if (req[0]) begin
+        ns = g1 ;
+     end               
+     else begin
+         ns = IDLE;
+         next_turn = 2'b01;        
+     end
+end 
+      
+g2: begin
+    gnt[1]=1;                 
+    if (req[1]) begin
+       ns = g2;
+       end 
+    else begin
+       ns = IDLE;
+       next_turn = 2'b10;       
+       end
+end 
+
+g3: begin
+    gnt[2]=1;                 
+    if (req[2]) begin
+        ns = g3;
+    end 
+    else begin
+        ns = IDLE;
+        next_turn = 2'b00;       
+    end
 end
 
-// 3) Moore output logic: gnt depends only on the state
-always @(*) begin
-    case (state)
-        GNT_M0:  gnt = 3'b001;
-        GNT_M1:  gnt = 3'b010;
-        GNT_M2:  gnt = 3'b100;
-        default: gnt = 3'b000;
-    endcase
+default: begin
+    ns = IDLE;
+    next_turn = 2'b00;
+    gnt=1'b0;
 end
+
+endcase
+
+end 
+
+endmodule
+
 ```
 
 A few deliberate choices are worth calling out. `IDLE` and `GNT_M2` share a branch because they use the same priority order (M0 first), which removes duplicated logic without changing behaviour. `next_state` is given a default value at the top of the block and a `default` case at the bottom, so there are no accidental latches and the unused-encoding case recovers safely to `IDLE`. The grant is a one-hot vector, which means downstream logic can use each bit directly as an enable with no decoding.
@@ -247,24 +314,6 @@ The testbench in [`tb/tb_round_robin_arbiter.v`](tb/tb_round_robin_arbiter.v) is
 
 1. **A continuous safety check** runs on every rising clock edge and flags an error if more than one grant bit is ever high, which proves mutual exclusion for the whole run.
 2. **A directed scenario** drives the exact request pattern shown in the timing diagram and compares the grant in every cycle against an expected value, covering fair rotation, skipping an idle master, wrap-around, holding the grant, and returning to `IDLE`.
-
-Console output from the run:
-
-```text
-PASS  cycle 0: req=000 gnt=000
-PASS  cycle 1: req=111 gnt=000
-PASS  cycle 2: req=111 gnt=001
-PASS  cycle 3: req=111 gnt=010
-PASS  cycle 4: req=110 gnt=100
-PASS  cycle 5: req=100 gnt=010
-PASS  cycle 6: req=101 gnt=100
-PASS  cycle 7: req=001 gnt=001
-PASS  cycle 8: req=000 gnt=001
-PASS  cycle 9: req=000 gnt=000
-PASS  cycle 10: req=000 gnt=000
-
-*** ALL TESTS PASSED ***
-```
 
 ---
 
@@ -292,15 +341,17 @@ In GTKWave, add `clk`, `req`, `gnt` and `dut.state` to the signal view to reprod
 ```text
 round-robin-arbiter/
 ├── assets/
-│   ├── banner.svg               # project banner
-│   ├── block_diagram.svg        # system architecture
-│   ├── fsm_state_diagram.svg    # 4-state FSM diagram
-│   ├── round_robin_concept.svg  # baton analogy + priority order
-│   └── timing_diagram.svg       # annotated waveform of the directed test
+│   ├── banner.svg               
+│   ├── block_diagram.svg        
+│   ├── fsm_state_diagram.svg    
+│   ├── round_robin_concept.svg  
+│   └── timing_diagram.svg       
 ├── rtl/
-│   └── round_robin_arbiter.v    # synthesizable design
+│   └── round_robin_arbiter.v
+|   └── top_module.v
+|   └── clk_division.v
 ├── tb/
-│   └── tb_round_robin_arbiter.v # self-checking testbench
+│   └── tb_round_robin_arbiter.v 
 └── README.md
 ```
 
@@ -326,11 +377,18 @@ Beyond the arbiter itself, this repository is meant to show a way of working: tr
 
 ## 👤 Author
 
-**AADHI**, Electronics and Communication Engineering undergraduate focused on RTL and digital design, and currently looking for VLSI / RTL design internship opportunities.
+**Vidharshana Sri S S**
+Electronics and Communication Engineering undergraduate focused on RTL and digital design, and currently looking for VLSI / RTL design internship opportunities.
 
-More of my Verilog and RTL learning work lives in [**Verilog-Core-Labs**](https://github.com/Vidharshanasri-SS/Verilog-Core-Labs).
+More of my Verilog and RTL learning work lives in [**Verilog-Core-Labs**](https://github.com/Vidharshanasri-SS/Verilog-Core-Labs).    
 
-If this project helped you or you spot something to improve, feel free to open an issue or reach out.
+📧 Email:vidharshanasri.ss@gmail.com     
+
+💼 LinkedIn: https://linkedin.com/vidharshanasrisivakumar   
+
+🐙 GitHub: https://github.com/Vidharshanasri-SS   
+   
+If this project helped you or you spot something to improve, feel free to open an issue or reach out.   
 
 <p align="center">
   <sub>Built with Verilog, verified with Icarus Verilog, explained with way too many diagrams.</sub>
