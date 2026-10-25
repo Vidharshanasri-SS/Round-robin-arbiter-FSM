@@ -1,0 +1,25 @@
+module top(
+    input        mclk,
+    input  [2:0] sw,
+    input        btn0,
+    output [3:0] led        // led[2:0] = gnt, led[3] = 1 Hz tick
+);
+
+wire clk_1hz;
+
+clk_div #(.HALF(50_000_000)) u_div (
+    .clk_in (mclk),
+    .rst    (btn0),
+    .clk_out(clk_1hz)
+);
+
+rr_arbiter_fsm u_arb (
+    .gnt(led[2:0]),
+    .req(sw),
+    .clk(clk_1hz),
+    .rst(btn0)
+);
+
+assign led[3] = clk_1hz;
+
+endmodule
