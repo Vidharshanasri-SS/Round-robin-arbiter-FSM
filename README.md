@@ -337,26 +337,11 @@ The testbench in [`tb/tb_round_robin_arbiter.v`](tb/tb_round_robin_arbiter.v) is
 1. **A continuous safety check** runs on every rising clock edge and flags an error if more than one grant bit is ever high, which proves mutual exclusion for the whole run.
 2. **A directed scenario** drives the request pattern shown in the timing diagram and compares both the grant and the `turn` register against the expected value in every cycle. It covers a three-way contention, masters holding and releasing the grant, the `turn` pointer rotating 0 → 1 → 2 → 0, and a case where `turn` makes a higher-numbered master beat master 0.
 
-Console output from the run:
+---
 
-```text
-PASS  T0: req=000 state=IDLE turn=0 gnt=000
-PASS  T1: req=111 state=IDLE turn=0 gnt=000
-PASS  T2: req=111 state= g1  turn=0 gnt=001
-PASS  T3: req=110 state= g1  turn=0 gnt=001
-PASS  T4: req=110 state=IDLE turn=1 gnt=000
-PASS  T5: req=110 state= g2  turn=1 gnt=010
-PASS  T6: req=100 state= g2  turn=1 gnt=010
-PASS  T7: req=101 state=IDLE turn=2 gnt=000
-PASS  T8: req=101 state= g3  turn=2 gnt=100
-PASS  T9: req=001 state= g3  turn=2 gnt=100
-PASS  T10: req=001 state=IDLE turn=0 gnt=000
-PASS  T11: req=001 state= g1  turn=0 gnt=001
-PASS  T12: req=000 state= g1  turn=0 gnt=001
-PASS  T13: req=000 state=IDLE turn=1 gnt=000
+## 🎥 Demonstration
 
-*** ALL TESTS PASSED ***
-```
+[▶ Watch the FPGA demo](demonstration/round_robin_demonstration(1).mp4)   
 
 ---
 
