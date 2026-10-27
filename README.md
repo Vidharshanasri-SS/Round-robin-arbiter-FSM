@@ -397,11 +397,11 @@ round-robin-arbiter/
 │   ├── round_robin_concept.svg
 │   └── timing_diagram.svg
 ├── rtl/
-│   ├── round_robin_arbiter.v     # rr_arbiter_fsm, the arbiter itself
-│   ├── top_module.v              # top-level module for the FPGA design
-│   └── clk_division.v            # clock divider
+│   ├── round_robin_arbiter.v     
+│   ├── top_module.v             
+│   └── clk_division.v           
 ├── tb/
-│   └── tb_round_robin_arbiter.v  # self-checking testbench
+│   └── tb_round_robin_arbiter.v  
 └── README.md
 ```
 
