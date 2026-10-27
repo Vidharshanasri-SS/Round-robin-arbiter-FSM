@@ -341,7 +341,7 @@ The testbench in [`tb/tb_round_robin_arbiter.v`](tb/tb_round_robin_arbiter.v) is
 
 ## 🎥 Demonstration
 
-[▶ Watch the FPGA demo](demonstration/round_robin_demonstration(1).mp4)   
+[▶ Watch the FPGA demo](demonstration/round_robin_demonstration (1).mp4)   
 
 ---
 
